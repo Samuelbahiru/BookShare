@@ -1,9 +1,18 @@
 import express from "express";
 import User from "../models/User.js";
+import jwt from "jsonwebtoken";
+
 const router = express.Router();
 
-router.post("/login", async (req, res) => {
+const generateToken = (id) => {
+  return jwt.sign({ id }, process.env.JWT_SECRET, {
+    expiresIn: "15d",
+  });
+};
+
+router.post("/register", async (req, res) => {
   try {
+    console.log("request body", req.body);
     const { username, email, password } = req.body;
     if (!username || !email || !password) {
       return res.status(400).json({ message: "Please fill all fields" });
@@ -38,14 +47,54 @@ router.post("/login", async (req, res) => {
       password,
       profileImage,
     });
-    res.status(201).json(newUser);
+    const token = generateToken(newUser._id);
+
+    res.status(201).json({
+      user: {
+        _id: newUser._id,
+        username: newUser.username,
+        email: newUser.email,
+        profileImage: newUser.profileImage,
+      },
+      token,
+    });
   } catch (error) {
     console.log(error.message);
     res.status(500).json({ message: error.message });
   }
 });
-router.post("/register", async (req, res) => {
-  res.send("register route");
+
+router.post("/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ message: "Please fill all fields" });
+    }
+
+    // check if user exists
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(400).json({ message: "Invalid credentials" });
+    }
+    // check if password is correct
+    const isPasswordCorrect = await user.comparePassword(password);
+    if (!isPasswordCorrect) {
+      return res.status(400).json({ message: "Invalid credentials" });
+    }
+    const token = generateToken(user._id);
+    res.status(200).json({
+      user: {
+        _id: user._id,
+        username: user.username,
+        email: user.email,
+        profileImage: user.profileImage,
+      },
+      token,
+    });
+  } catch (error) {
+    console.log(error.message);
+    res.status(500).json({ message: error.message });
+  }
 });
 
 export default router;
